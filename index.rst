@@ -71,14 +71,10 @@ Why InfluxData?
 ^^^^^^^^^^^^^^^
 The InfluxData stack provides a complete solution for storing, visualizing and processing time series data:
 
-* InfluxDB_ is an open-source time series database written in Go, it has an SQL-like query language (InfluxQL) and provides an HTTP API as well as API client libraries.
-* Chronograf_  is an open-source web application for time series visualization written in Go and React.js
-* Kapacitor_ is an open-source framework written in Go for processing, monitoring, and alerting on time series data.
+* `InfluxDB <https://docs.influxdata.com/influxdb/v1.7/>`_ is an open-source time series database written in Go, it has an SQL-like query language (InfluxQL) and provides an HTTP API as well as API client libraries.
+* `Chronograf <https://docs.influxdata.com/chronograf/v1.7/>`_  is an open-source web application for time series visualization written in Go and React.js
+* `Kapacitor <https://docs.influxdata.com/kapacitor/v1.5/>`_ is an open-source framework written in Go for processing, monitoring, and alerting on time series data.
 
-
-.. _InfluxDB: https://docs.influxdata.com/influxdb/v1.7/
-.. _Chronograf: https://docs.influxdata.com/chronograf/v1.7/
-.. _Kapacitor: https://docs.influxdata.com/kapacitor/v1.5/
 
 Deploying Confluent Kafka and InfluxData
 ========================================
@@ -137,6 +133,7 @@ The measured throughput
 
 .. figure:: /_static/salmock_produced_total.png
    :name: Producer metric.
+   :target: _static/salmock_produced_total.png
 
    The producer throughput as measured by the ``salmock_produced_total`` metric.
 
@@ -246,6 +243,7 @@ In  `Chronograf <https://chronograf-demo.lsst.codes>`_, one can browse the SAL t
 
 .. figure:: /_static/chronograf.png
    :name: Chronograf Explore tool.
+   :target: _static/chronograf.png
 
    Visualization of a particular topic using the Chronograf Explore tool.
 
@@ -256,20 +254,24 @@ Latency measurements
 
 .. figure:: /_static/latency.png
    :name: Roundtrip latency for a telemetry message.
+   :target: _static/latency.png
 
    The roundtrip latency for a telemetry topic measured as the difference between the InfluxDB and Kafka timestamps.
 
 We characterize the roundtrip latency as the difference between the time when the message was produced and the time when it was written to InfluxDB.
 
-**The median roundtrip latency for a telemetry topic produced over the duration of the experiment was 183ms with 99% of the messages with latency smaller than 1.34s.** This result is excellent compared to the long latency in making the EFD data available to DM as proposed in the baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
+**The median roundtrip latency for a telemetry topic produced over the duration of the experiment was 183ms with 99% of the messages with latency smaller than 1.34s.**
 
-In particular, this result is very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is certainly room for improvement, and many aspects to explore in both Kafa and InfluxDB deployments.
+This result would allow for quasi-realtime access to the telemetry stream from resources at the LDF.  This would not be possible with the current baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
+
+In particular, it is very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is certainly room for improvement, and many aspects to explore in both Kafa and InfluxDB deployments.
 
 The InfluxDB throughput
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. figure:: /_static/influxdb.png
    :name: InfluxDB throughput.
+   :target: _static/influxdb.png
 
    InfluxDB throughput measured as number of points per minute.
 
@@ -284,6 +286,7 @@ If we stop the InfluxDB Sink connector, and let the producer to run for a period
 
 .. figure:: /_static/influxdb_max.png
    :name: InfluxDB maximum throughput.
+   :target: _static/influxdb_max.png
 
    InfluxDB maximum throughput measured as number of points per minute.
 
@@ -299,7 +302,7 @@ Downsampling time series
 
 .. figure:: /_static/downsampling.png
    :name: Downsampling a SAL Telemetry message using a continuous query.
-
+   :target: _static/downsampling.png
 
 Example of a continuous query:
 
