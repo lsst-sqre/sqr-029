@@ -89,8 +89,14 @@ The GKE sluster specs
 * Total cores: 6 vCPUs
 * Total memory:	22.50 GB
 
+Terraform and Helm
+------------------
+
 Monitoring
 ----------
+
+The SAL Kafka writer
+====================
 
 The SAL mock experiment
 =======================
