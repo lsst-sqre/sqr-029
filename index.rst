@@ -66,9 +66,6 @@ The InfluxData stack
 Why a time series database?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-
-schema-on-write
-
 Why InfluxData?
 ^^^^^^^^^^^^^^^
 The InfluxData stack provides a complete solution for storing, visualizing and processing time series data:
@@ -81,13 +78,17 @@ The InfluxData stack provides a complete solution for storing, visualizing and p
 Deploying Confluent Kafka and InfluxData
 ========================================
 
-The GKE sluster specs
+The GKE cluster specs
 ---------------------
 
 * Machine type: n1-standard-2 (2 vCPUs, 7.5 GB memory)
 * Size: 3 nodes
 * Total cores: 6 vCPUs
 * Total memory:	22.50 GB
+
+The above specs are sufficient for JVM, but not recommended for production. See `Running Kafka in Production <https://docs.confluent.io/current/kafka/deployment.html>`_  and `InfluxDB hardware guidelines for single node <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ for more information.
+
+The performance requirements for InfluxDB, based on the expected throughout (see below), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category, thus a single InfluxDB node instance should be enough.
 
 Terraform and Helm
 ------------------
@@ -124,8 +125,7 @@ Total expected throughput: 29284 messages/s
 
 Experiment Duration: 16h
 
-
-
+A more realistic experiment would require knowing the frequency of each topic which is not always available in the SAL schema. We assume that the distribution of frequencies above, and the total expected throughput, can be used as an upper limit.
 
 Producing SAL topics
 --------------------
