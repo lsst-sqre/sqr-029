@@ -67,6 +67,8 @@ Why a time series database?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
+schema-on-write
+
 Why InfluxData?
 ^^^^^^^^^^^^^^^
 The InfluxData stack provides a complete solution for storing, visualizing and processing time series data:
@@ -146,22 +148,26 @@ Maximum measured throughput: 1330 messages/s
 Connecting Kafka and InfluxDB
 -----------------------------
 
-At the time of this implementation, the `Confluent InfluxDB connector <https://docs.confluent.io/current/connect/kafka-connect-influxdb/index.html>`_ was still in preview and did not have the functionality we needed. Instead of the Confluent connector, we used the `InfluxDB Sink connector developed by Landoop <https://docs.lenses.io/connectors/sink/influx.html>`_.
+At the time of this implementation, the `Confluent InfluxDB connector <https://docs.confluent.io/current/connect/kafka-connect-influxdb/index.html>`_ was still in preview and did not have the functionality we needed. Instead of the Confluent InfluxDB connector, we used the `InfluxDB Sink connector developed by Landoop <https://docs.lenses.io/connectors/sink/influx.html>`_.
 
 We added the Landoop InfluxDB Sink connector 1.1 plugin to the ``cp-kafka-connect`` container, and implemented scripts to facilitate its configuration.
 
-A limitation of version 1.1, though, was the lack of support for Avro ``array`` data type, which was solved by `contributing to the plugin development <https://github.com/Landoop/stream-reactor/pull/522>`_.
+A limitation of version 1.1, though, was the lack of support for the Avro ``array`` data type, which was solved by `contributing to the plugin development <https://github.com/Landoop/stream-reactor/pull/522>`_.
 
 
 
-The InfluxDB data model
-^^^^^^^^^^^^^^^^^^^^^^^
+The InfluxDB schema
+^^^^^^^^^^^^^^^^^^^
 
-The InfluxDB data model does not necessarily need to follow the Avro schema. The InfluxDB Sink Connector supports KCQL, the Kafka Connect Query Language that can be used to select fields, define the target measurement, and `set tags to annotate the measurements <https://docs.influxdata.com/influxdb/v1.7/concepts/schema_and_data_layout/>`_.
+One of the characteristics of InfluxDB is that the schema is created as the data is written to the database, this is commonly referred as *schemaless* or *schema-on-write*. The advantage is that no schema creation and database migrations are needed simplifying the database management, but it also means that it is not possible to enforce a schema with InfluxDB only.
 
-In the current implementation, the InfluxDB data model is the simplest possible. We just create an InfluxDB measurement with the topic name and select all fields from the topic.
+In the proposed architecture, the schema is controlled by Kafka through `Avro and the Schema Registry <https://docs.confluent.io/current/schema-registry/docs/index.html#schemaregistry-intro>`_. As the schema may need to evolve over time it is important for InfluxDB, and for other consumers, to be able to handle data encoded with both old and new schema seamlessly. While `schema evolution <https://docs.confluent.io/current/schema-registry/docs/avro.html#data-serialization-and-evolution>`_ is not explored throughout the SAL Mock experiment it is certainly important and must be revisited.
 
-Example of Avro schema for the ``"MTM1M3_accelerometerData`` SAL telemetry topic, and the corresponding InfluxDB measurement:
+The data written to InfluxDB, however, does not necessarily need to follow exactly the Avro schema. The InfluxDB Sink Connector supports `KCQL <https://docs.lenses.io/connectors/sink/influx.html#kcql-support>`_, the Kafka Connect Query Language that can be used to select fields, define the target measurement, and `set tags to annotate the measurements <https://docs.influxdata.com/influxdb/v1.7/concepts/schema_and_data_layout/>`_.
+
+In the current implementation, the InfluxDB schema is the simplest possible. We create an InfluxDB measurement with the topic name and select all fields from the topic.
+
+Example of Avro schema for the ``MTM1M3_accelerometerData`` topic, and the corresponding InfluxDB schema:
 
 ::
 
@@ -256,7 +262,7 @@ Latency measurements
    :name: Roundtrip latency for a telemetry message.
    :target: _static/latency.png
 
-   The roundtrip latency for a telemetry topic measured as the difference between the InfluxDB and Kafka timestamps.
+   The roundtrip latency for a telemetry topic during the experiment, measured as the difference between the producer and InfluxDB (consumer) timestamps.
 
 We characterize the roundtrip latency as the difference between the time when the message was produced and the time when it was written to InfluxDB.
 
@@ -275,33 +281,48 @@ The InfluxDB throughput
 
    InfluxDB throughput measured as number of points per minute.
 
-An InfluxDB database stores points. In the current data model a point has a timestamp, a measurement, and its fields. Thus, by construction an InfluxDB point is equivalent to a single message.
+An InfluxDB database stores points. In the current data model a point has a timestamp, a measurement, and fields. Thus, by construction an InfluxDB point is equivalent to an message.
 
-The measured InfluxDB throughput during the experiment was ~80k points per minute or ~1.3k messages/s, which is basically determined by the producer throughput (see above).
+The measured InfluxDB throughput during the experiment was ~80k points/min or ~1.3k messages/s, which is basically determined by the producer throughput (see above).
+
+InfluxDB provides a metric ``write_error`` that counts the number of errors when writing points, and it was ``write_error=0`` during the whole experiment.
 
 However, the measured producer throughput is lower than expected throughput. We could improve the performance of the producer code or put more resources to run the producer jobs, but a simple test can be done to assess the maximum InfluxDB throughput.
 
-If we stop the InfluxDB Sink connector, and let the producer to run for a period of time T, the messages produced during T will be cached at the Kafka broker. As soon as the connector is res-started, all the messages will be flushed to InfluxDB as if they were produced in a much higher throughput. The result of this test is shown in the  figure below, were we see a measured throughput of 1M points/minute (or 16k messages/s) about 10x higher than the previous result.
+We stopped the InfluxDB Sink connector, and let the producer to run for a period of time T, the messages produced during T were cached at the Kafka brokers. As soon as the connector was res-started, all the messages were flushed to InfluxDB as if they were produced in a much higher throughput.
+
+The result of this test is shown in the  figure below, were we see a measured throughput of 1M points/min (or 16k messages/s) about 10 times higher than the previous result.
 
 
 .. figure:: /_static/influxdb_max.png
    :name: InfluxDB maximum throughput.
    :target: _static/influxdb_max.png
 
-   InfluxDB maximum throughput measured as number of points per minute.
+   InfluxDB maximum throughput measured as number of points/min.
 
-Again, this result is pretty good given that we are running on modest hardware and using the InfluxDB default configuration.
-
-Configuring a Retention Policy
-------------------------------
+Also, ``write_error=0`` during this test, and we note again that we are running on modest hardware and using the InfluxDB default configuration.
 
 
 
-Downsampling time series
-------------------------
+Lessons Learned
+===============
+
+Downsampling and data retention
+-------------------------------
+
+It was clear during the experiments that the disks fill up pretty quickly. InfluxDB was writing at a rate of ~700M/h which means that the 128G disk would be filled up in ~7 days. Similarly, for Kafka, we filled up the 5G disk of each broker in a few days. That means we need downsampling the data if we don't want to loose it and configure retention policies to automatically discard data after it's no longer useful.
+
+Both `downsampling and data retention <https://docs.influxdata.com/influxdb/v1.7/guides/downsampling_and_retention/>`_ can be easily configured in InfluxDB.
+
+Time Series data is organized in *shards*, and InfluxDB will drop an entire shard when the retention policy is enforced. That means the retention policy's duration must be longer than the shard duration.
+
+For the experiments, we have created our `kafka` database in InfluxDB to have a default retention policy of 24h and and shard duration of 1h following the `retention policy documentation <https://docs.influxdata.com/influxdb/v1.7/query_language/database_management/#create-retention-policies-with-create-retention-policy>`_.
+
+Retention policies are created per database, and it is possible to have multiple retention policies for the same database. In order to preserve data for a longer time period, we have created another retention policy with a duration of 1 year and a `Continuos Query <https://docs.influxdata.com/influxdb/v1.7/query_language/continuous_queries/>`_ to average the time series every 30s.
+
 
 .. figure:: /_static/downsampling.png
-   :name: Downsampling a SAL Telemetry message using a continuous query.
+   :name: Downsampling a time series using a continuous query.
    :target: _static/downsampling.png
 
 Example of a continuous query:
@@ -316,19 +337,19 @@ Example of a continuous query:
     GROUP BY time(30s)
   END
 
+The retention policy of 24h in InfluxDB suggests that we configure a Kafka retention policy for the logs and topic offsets with the same duration. That means InfluxDB could be unavailable for 24h and still recover the messages from the Kafka brokers. The following `configuration <https://kafka.apache.org/documentation/#configuration>`_ parameters were added to the Kafka helm chart:
 
 
-Lessons Learned
-===============
+::
 
-InfluxDB Retention Policy
--------------------------
+  offsets.retention.minutes: 1440
+  log.retention.hours: 24
+
 
 InfluxDB HTTP API
 -----------------
-Connecting to the InfluxDB HTTP API.
-
-Set `max_row_limit=0` in the InfluxDB configuration to avoid data truncation.
+InfluxDB provides an HTTP API for accessing the data, when using the HTTP API we
+set ``max_row_limit=0`` in the InfluxDB configuration to avoid data truncation.
 
 
 References
