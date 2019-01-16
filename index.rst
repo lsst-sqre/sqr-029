@@ -358,6 +358,39 @@ InfluxDB provides an HTTP API for accessing the data, when using the HTTP API we
 set ``max_row_limit=0`` in the InfluxDB configuration to avoid data truncation.
 
 
+APPENDIX
+========
+
+Kafka Terminology
+-----------------
+
+- Each server in the Kafka clusters is called a **broker**.
+- Kafka messages are stored as well as published in a category name called **topic**.
+- A kafka message is a key-value pair, and the key, message, or both, can be serialized as **Avro**.
+- A **schema** defines the structure of the Avro data format.
+- A **subject** is defined in the Schema Registry as a scope where a schema can evolve. The name of the subject depends on the configured subject name strategy, which by default is set to derive subject name from topic name.
+- The processes which publish messages to Kafka are called **producers**. In addition, it publishes data on specific topics.
+- The processes that subscribe to topics are called **consumers**.
+- The position of the consumer in the log and which is retained on a per-consumer basis is called **offset**.
+- The Kafka **connector** permits to build and run reusable consumers or producers that connects existing applications to Kafka topics.
+
+
+InfluxDB Terminology
+--------------------
+
+- A **measurement** is conceptually similar to an SQL table. The measurement name describes the data stored in the associated fields.
+- A **field** corresponds to the actual data and are not indexed.
+- A **tag** is used to annotate your data  (metadata) and is automatically indexed.
+- A **point** contains the field-set of a series for a given tag-set and timestamp. Points are equivalent to messages in Kafka.
+- A **series** contains Points and is defined by a measurement and a tag-set.
+- The **series cardinality** depends essentially on how the tag-set is designed. A rule of thumb for InfluxDB is to have fewer series with more points than more series with fewer points to improve performance.
+- A **database** store one or more series.
+- A database can have one or more **retention policies**.
+
+
+
+
+
 References
 ==========
 
