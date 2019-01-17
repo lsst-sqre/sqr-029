@@ -86,9 +86,9 @@ The GKE cluster specs
 * Total cores: 6 vCPUs
 * Total memory:	22.50 GB
 
-The above specs are sufficient for JVM, but not recommended for production. See `Running Kafka in Production <https://docs.confluent.io/current/kafka/deployment.html>`_  and `InfluxDB hardware guidelines for single node <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ for more information.
+The above specs are sufficient for running JVM, but not recommended for production. See `Running Kafka in Production <https://docs.confluent.io/current/kafka/deployment.html>`_  and `InfluxDB hardware guidelines for single node <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ for more information.
 
-The performance requirements for InfluxDB, based on the expected throughout (see below), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category, thus a single InfluxDB node instance should be enough.
+The performance requirements for InfluxDB, based on the expected throughout (see below), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category, thus a single InfluxDB node instance for the DM-EFD should be enough.
 
 Terraform and Helm
 ------------------
@@ -109,13 +109,13 @@ A limitation of version 1.1, though, was the lack of support for the Avro ``arra
 The InfluxDB schema
 -------------------
 
-One of the characteristics of InfluxDB is that the schema is created as the data is written to the database, this is commonly referred as *schemaless* or *schema-on-write*. The advantage is that no schema creation and database migrations are needed greatly simplifying the database management, but it also means that it is not possible to enforce a schema within InfluxDB only.
+One of the characteristics of InfluxDB is that the schema is created as the data is written to the database, this is commonly referred as *schemaless* or *schema-on-write*. The advantage is that no schema creation and database migrations are needed, greatly simplifying the database management. However,  it also means that it is not possible to enforce a schema with InfluxDB only.
 
-In the proposed architecture, the schema is controlled by Kafka through `Avro and the Schema Registry <https://docs.confluent.io/current/schema-registry/docs/index.html#schemaregistry-intro>`_. As the schema may need to evolve over time it is important for InfluxDB, and for other consumers, to be able to handle data encoded with both old and new schema seamlessly. While `schema evolution <https://docs.confluent.io/current/schema-registry/docs/avro.html#data-serialization-and-evolution>`_ is not explored throughout the SAL Mock experiment it is certainly important and must be revisited.
+In the proposed architecture, the schema is controlled by Kafka through `Avro and the Schema Registry <https://docs.confluent.io/current/schema-registry/docs/index.html#schemaregistry-intro>`_. As the schema may need to evolve over time it is important for InfluxDB, and for other consumers, to be able to handle data encoded with both old and new schema seamlessly. While `schema evolution <https://docs.confluent.io/current/schema-registry/docs/avro.html#data-serialization-and-evolution>`_ is not explored throughout this report it is certainly important and must be revisited.
 
 The data written to InfluxDB, however, does not necessarily need to follow the Avro schema. The InfluxDB Sink Connector supports `KCQL <https://docs.lenses.io/connectors/sink/influx.html#kcql-support>`_, the Kafka Connect Query Language, That can be used to select fields define the target measurement, and `set tags to annotate the measurements <https://docs.influxdata.com/influxdb/v1.7/concepts/schema_and_data_layout/>`_.
 
-In the current implementation, the InfluxDB schema is the simplest possible. We create an InfluxDB measurement with the topic name and select all fields from the topic.
+In the current implementation, the InfluxDB schema is the simplest possible. We create an InfluxDB measurement with the same name as the topic and select all fields from the topic.
 
 Example of an Avro schema for the ``MTM1M3_accelerometerData`` SAL topic, and the corresponding InfluxDB schema:
 
@@ -211,9 +211,9 @@ These visualizations can be organized in Dashboards for monitoring the different
 The SAL mock experiment
 =======================
 
-With the SAL mock experiment, we want to access the performance of our implementation of the DM-EFD, which is important for the availability of the telemetry data for the DM systems.
+With the SAL mock experiment, we want to access the performance of our prototype implementation of the DM-EFD.
 
-In the following sections we explain the experiment we designed, how we produce messages for the SAL topics, and finally we characterize the mean latency for a message from the time it was produced to the time it is written to InfluxDB and we finally measure the InfluxDB throughput during the experiment.
+In the following sections we explain the experiment we designed, how we produced messages for the SAL topics, and finally we characterize the mean latency for a message from the time it was produced to the time it is written to InfluxDB and we finally measure the InfluxDB throughput during the experiment.
 
 
 Designing the experiment
@@ -245,7 +245,7 @@ Producing SAL topics
 --------------------
 
 - Converting SAL XML schema to Apache Avro
-- AIOKafkaProducer
+- The AIOKafkaProducer
 
 The measured throughput
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -254,11 +254,16 @@ The measured throughput
    :name: Producer metric.
    :target: _static/salmock_produced_total.png
 
-   The producer throughput as measured by the ``salmock_produced_total`` metric.
+   The producer throughput as measured by the ``salmock_produced_total`` Prometheus metric.
 
 - Number of topics produced: 1051
 - Maximum measured throughput for the producers: 1330 messages/s
 
+Another Prometheus metric of interest is ``cp_kafka_server_brokertopicmetrics_bytesinpersec`` which give us a mean throughput at the brokers, for all topics, of 40KB/s. The same value is observed when looking at the Network traffic as monitored by the InfluxDB telegraf client.
+
+As a point of comparison, this throughput is lower than the *Long-term mean ingest rate to the Engineering and Facilities Database of non-science images required to be supported* for the EFD of 1.9 MB/s from **OCS-REQ-0048**.
+
+We can do better by improving our producers throughput, and we demonstrate that we can reach a higher throughput with a simple test when accessing the InfluxDB maximum throughput for the current setup.
 
 Latency measurements
 --------------------
@@ -275,7 +280,6 @@ We characterize the roundtrip latency as the difference between the time when th
 
 This result would allow for quasi-realtime access to the telemetry stream from resources at the LDF.  This would not be possible with the current baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
 
-In particular, it is very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is certainly room for improvement, and many aspects to explore in both Kafa and InfluxDB deployments.
 
 The InfluxDB throughput
 -----------------------
@@ -286,19 +290,17 @@ The InfluxDB throughput
 
    InfluxDB throughput measured as number of points per minute.
 
-An InfluxDB database stores points. In the current data model a point has a timestamp, a measurement, and fields. Thus, by construction an InfluxDB point is equivalent to an message.
-
-The measured InfluxDB throughput during the experiment was ~80k points/min or 1333 messages/s, which is basically the producer throughput (see above). This result is supported by the very low latency observed.
+Because of the current InfluxDB schema, an InfluxDB point is equivalent to a message. The measured InfluxDB throughput during the experiment was ~80k points/min or 1333 messages/s, which is basically the producer throughput (see above). This result is supported by the very low latency observed.
 
 InfluxDB provides a metric ``write_error`` that counts the number of errors when writing points, and it was ``write_error=0`` during the whole experiment.
 
-During the experiment we saw the InfluxDB disk filling up at a rate of 682MB/h or 16GB/day. Even with `InfluxDB data compression <https://www.influxdata.com/blog/influxdb-0-9-3-released-with-compression-improved-write-throughput-and-migration-from-0-8/>`_ that means 5.7TB/year which seems *too much* specially if we want two query over longer periods of time like **OCS-REQ-0047** suggests, e.g. *"raft 13 temperatures for past 2 years"*. For the DM-EFD we are considering downsampling and a retention policy as discussed in the `Lessons Learned`_.
+During the experiment, we also saw the InfluxDB disk filling up at a rate of 682MB/h or 16GB/day. Even with `InfluxDB data compression <https://www.influxdata.com/blog/influxdb-0-9-3-released-with-compression-improved-write-throughput-and-migration-from-0-8/>`_ that means 5.7TB/year which seems *too much* specially if we want two query over longer periods of time like **OCS-REQ-0047** suggests, e.g. *"raft 13 temperatures for past 2 years"*. For the DM-EFD, we are considering downsampling the time series and using a retention policy, as discussed in the `Lessons Learned`_.
 
 Finally, a simple test can be done to assess the maximum InfluxDB throughput for the current setup.
 
 We stopped the InfluxDB Sink connector, and let the producer run for a period of time T, the messages produced during T were cached at the Kafka brokers. As soon as the connector was res-started, all the messages were flushed to InfluxDB as if they were produced in a much higher throughput.
 
-The result of this test is shown in the figure below, were we see a measured throughput of 1M points/min or 16k messages/s about 10 times higher than the previous result.
+The result of this test is shown in the figure below, were we see a measured throughput of 1M points/min or 16k messages/s a factor of 12 better than the previous result. Also, we had ``write_error=0`` during this test.
 
 
 .. figure:: /_static/influxdb_max.png
@@ -307,8 +309,7 @@ The result of this test is shown in the figure below, were we see a measured thr
 
    InfluxDB maximum throughput measured as number of points/min.
 
-Also, ``write_error=0`` during this test, and we note again that we are running on modest hardware and using the InfluxDB default configuration.
-
+In particular, these results are very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is certainly room for improvement, and many aspects to explore in both Kafa and InfluxDB deployments.
 
 The SAL Kafka writer
 ====================
@@ -365,6 +366,20 @@ InfluxDB HTTP API
 InfluxDB provides an HTTP API for accessing the data, when using the HTTP API we
 set ``max_row_limit=0`` in the InfluxDB configuration to avoid data truncation.
 
+A code snippet to retrieve data from a particular topic would look like:
+
+::
+
+  import requests
+
+  INFLUXDB_API_URL = "https://kafka-influxdb-demo.lsst.codes"
+  INFLUXDB_DATABASE = "kafka"
+
+  def get_topic_data(topic):
+    params={'q': 'SELECT * FROM "{}\"."autogen"."{}" where time > now()-24h'.format(INFLUXDB_DATABASE, topic)}
+    r = requests.post(url=INFLUXDB_API_URL + "/query", params=params)
+
+    return r.json()
 
 APPENDIX
 ========
