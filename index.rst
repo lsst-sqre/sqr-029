@@ -361,8 +361,9 @@ The retention policy of 24h in InfluxDB suggests that we configure a Kafka reten
     log.retention.hours: 24
 
 
-InfluxDB HTTP API
------------------
+The InfluxDB HTTP API
+---------------------
+
 InfluxDB provides an HTTP API for accessing the data, when using the HTTP API we
 set ``max_row_limit=0`` in the InfluxDB configuration to avoid data truncation.
 
@@ -380,6 +381,27 @@ A code snippet to retrieve data from a particular topic would look like:
     r = requests.post(url=INFLUXDB_API_URL + "/query", params=params)
 
     return r.json()
+
+
+Backing up an InfluxDB database
+--------------------------------
+
+InfluxDB supports `backup and restore <https://docs.influxdata.com/influxdb/v1.7/administration/backup_and_restore/>`_ functions on online databases. A backup of a 24h worth of data database took less than 10 minutes in our current setup while running the SAL Mock Experiment and ingesting data at 80k points/min.
+
+Backup files are split by shards, in `Downsampling and data retention`_ we configured our retention policy to 24h and shard duration to 1h, so the resulting backup has 24 files.
+
+We do observe a drop in the ingestion rate to 50k points/min during the backup but no write errors, and Kafka design ensures nothing gets lost even if the InfluxDB ingestion rate slows down.
+
+
+.. figure:: /_static/influxdb_backup.png
+   :name: Drop in the ingestion rate during a backup of the DM-EFD database.
+   :target: _static/influxdb_backup.png
+
+
+
+
+User Defined Functions
+----------------------
 
 APPENDIX
 ========
