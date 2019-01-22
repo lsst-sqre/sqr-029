@@ -213,7 +213,7 @@ The SAL mock experiment
 
 With the SAL mock experiment, we want to access the performance of our prototype implementation of the DM-EFD.
 
-In the following sections we explain the experiment we designed, how we produced messages for the SAL topics, and finally, we characterize the mean latency for a message from the time it was produced to the time InfluxDB writes it to the disk. Finally, we measure the InfluxDB throughput during the experiment.
+In the following sections we explain the experiment we designed, how we produced messages for the SAL topics, and finally, we characterize the mean latency for a message from the time it was produced to the time InfluxDB writes it to the disk. Finally, we measure the InfluxDB ingestion rate during the experiment.
 
 
 Designing the experiment
@@ -263,7 +263,7 @@ Another Prometheus metric of interest is ``cp_kafka_server_brokertopicmetrics_by
 
 As a point of comparison, this throughput is lower than the *Long-term mean ingest rate to the Engineering and Facilities Database of non-science images required to be supported* for the EFD of 1.9 MB/s from **OCS-REQ-0048**.
 
-We can do better by improving the producer throughput, and we demonstrate that we can reach a higher performance with a simple test when accessing the InfluxDB maximum throughput for the current setup.
+We can do better by improving the producer throughput, and we demonstrate that we can reach a higher performance with a simple test when accessing the InfluxDB maximum ingestion rate for the current setup.
 
 Latency measurements
 --------------------
@@ -281,35 +281,35 @@ We characterize the roundtrip latency as the difference between the time the mes
 This result would allow for quasi-realtime access to the telemetry stream from resources at the LDF.  That would not be possible with the current baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
 
 
-The InfluxDB throughput
------------------------
+The InfluxDB ingestion rate
+---------------------------
 
 .. figure:: /_static/influxdb.png
-   :name: InfluxDB throughput.
+   :name: InfluxDB ingestion rate.
    :target: _static/influxdb.png
 
-   The figure shows the InfluxDB throughput in units of points per minute.
+   The figure shows the InfluxDB ingestion rate in units of points per minute.
 
-Because of the current InfluxDB schema, an InfluxDB point is equivalent to a message. The measured InfluxDB throughput during the experiment was ~80k points/min or 1333 messages/s, which is the producer throughput (see above). This result is supported by the very low latency observed.
+Because of the current InfluxDB schema, an InfluxDB point is equivalent to a message. The measured InfluxDB ingestion rate during the experiment was ~80k points/min or 1333 messages/s, which is the producer throughput (see above). This result is supported by the very low latency observed.
 
 InfluxDB provides a metric ``write_error`` that counts the number of errors when writing points, and it was ``write_error=0`` during the whole experiment.
 
 During the experiment, we also saw the InfluxDB disk filling up at a rate of 682MB/h or 16GB/day. Even with `InfluxDB data compression <https://www.influxdata.com/blog/influxdb-0-9-3-released-with-compression-improved-write-throughput-and-migration-from-0-8/>`_ that means 5.7TB/year which seems too much, especially if we want to query over longer periods like **OCS-REQ-0047** suggests, e.g., *"raft 13 temperatures for past two years"*. For the DM-EFD, we are considering downsampling the time series and using a retention policy, as discussed in the `Lessons Learned`_.
 
-Finally, a simple test can be done to assess the maximum InfluxDB throughput for the current setup.
+Finally, a simple test can be done to assess the maximum InfluxDB ingestion rate for the current setup.
 
 We stopped the InfluxDB Sink connector, and let the producer running during a period T. The Kafka brokers cached the messages produced during T, and as soon as the connector was re-started, all the messages were flushed to InfluxDB as if they were produced in a much higher throughput.
 
-The figure below shows the result of this test, where we see a measured throughput of 1M points per minute or 16k messages per second, a factor of 12 better than the previous result. Also, we had ``write_error=0`` during this test.
+The figure below shows the result of this test, where we see a measured ingestion rate of 1M points per minute or 16k messages per second, a factor of 12 better than the previous result. Also, we had ``write_error=0`` during this test.
 
 
 .. figure:: /_static/influxdb_max.png
-   :name: InfluxDB maximum throughput.
+   :name: InfluxDB maximum ingestion rate.
    :target: _static/influxdb_max.png
 
-   InfluxDB maximum throughput measured as the number of points/min.
+   The figure shows the InfluxDB maximum ingestion rate measured in units of points per minute.
 
-In particular, these results are very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is indeed room for improvement, and many aspects to explore in both Kafa and InfluxDB deployments.
+In particular, these results are very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is indeed room for improvement, and many aspects to explore in both Kafka and InfluxDB deployments.
 
 The SAL Kafka writer
 ====================
@@ -321,7 +321,7 @@ Lessons Learned
 Downsampling and data retention
 -------------------------------
 
-It was evident during the experiments that the disks fill up pretty quickly. The influxDB disk was filling up at a rate of ~700M/h which means that the 128G storage would be filled up in ~7 days. Similarly, for Kafka, we filled up the 5G disk of each broker in a few days. That means we need downsampling the data if we don't want to lose it and configure retention policies to discard data after it is no longer useful automatically.
+It was evident during the experiment that the disks fill up pretty quickly. The influxDB disk was filling up at a rate of ~700M/h which means that the 128G storage would be filled up in ~7 days. Similarly, for Kafka, we filled up the 5G disk of each broker in a few days. That means we need downsampling the data if we don't want to lose it and configure retention policies to discard data after it is no longer useful automatically.
 
 In InfluxDB it is easy to configure both `downsampling and data retention <https://docs.influxdata.com/influxdb/v1.7/guides/downsampling_and_retention/>`_.
 
@@ -335,6 +335,8 @@ InfluxDB creates retention policies per database, and it is possible to have mul
 .. figure:: /_static/downsampling.png
    :name: Downsampling a time series using a continuous query.
    :target: _static/downsampling.png
+
+   The figure shows a raw time series (top) and an averaged time series by a continuous queries (bottom).
 
 Example of a continuous query for the `mtm1m3-accelerometerdata` topic. If we produce topics at 100Hz and average the time series in intervals of 30 seconds, the downsampling factor is 30000.
 
