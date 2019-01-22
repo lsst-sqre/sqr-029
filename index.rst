@@ -338,7 +338,7 @@ InfluxDB creates retention policies per database, and it is possible to have mul
    :name: Downsampling a time series using a continuous query.
    :target: _static/downsampling.png
 
-   The figure shows a raw time series (top) and an averaged time series by a continuous queries (bottom).
+   The figure shows a raw time series (top) and an averaged time series by a continuous query (bottom).
 
 Example of a continuous query for the `mtm1m3-accelerometerdata` topic. If we produce topics at 100Hz and average the time series in intervals of 30 seconds, the downsampling factor is 30000.
 
@@ -400,6 +400,8 @@ We do observe a drop in the ingestion rate to 50k points/min during the backup, 
 .. figure:: /_static/influxdb_backup.png
    :name: Drop in the ingestion rate during a backup of the DM-EFD database.
    :target: _static/influxdb_backup.png
+
+   The figures shows how the InfluxDB ingestion rate is affected during a backup.
 
 
 
