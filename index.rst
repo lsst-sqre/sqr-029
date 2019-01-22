@@ -193,20 +193,6 @@ Example of an Avro schema for the ``MTM1M3_accelerometerData`` SAL topic, and th
   2. InfluxDB does not support ``array`` data type. Fields named like ``<field name>0, <field name>1, ...`` were extracted from arrays in the Avro message.
 
 
-Visualizing SAL Topics with Chronograf
---------------------------------------
-
-`Chronograf <https://chronograf-demo.lsst.codes>`_ presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them.
-
-
-.. figure:: /_static/chronograf.png
-   :name: Chronograf Explore tool.
-   :target: _static/chronograf.png
-
-   Visualization using the Chronograf Explore tool.
-
-For monitoring the different telescope and observatory subsystems, it is possible to organize these visualizations in Dashboards.
-
 
 The SAL mock experiment
 =======================
@@ -310,6 +296,22 @@ The figure below shows the result of this test, where we see a measured ingestio
    The figure shows the InfluxDB maximum ingestion rate measured in units of points per minute.
 
 In particular, these results are very encouraging because both Kafka and InfluxDB were deployed in modest hardware, and with default configurations. There is indeed room for improvement, and many aspects to explore in both Kafka and InfluxDB deployments.
+
+
+Visualizing SAL Topics with Chronograf
+--------------------------------------
+
+`Chronograf <https://chronograf-demo.lsst.codes>`_ presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them.
+
+
+.. figure:: /_static/chronograf.png
+   :name: Chronograf Explore tool.
+   :target: _static/chronograf.png
+
+   Visualization using the Chronograf Explore tool.
+
+For monitoring the different telescope and observatory subsystems, it is possible to organize these visualizations in Dashboards.
+
 
 The SAL Kafka writer
 ====================
