@@ -19,8 +19,51 @@ Introduction
 The adopted technologies
 ========================
 
+.. _confluent-intro:
+
 The Confluent Kafka platform
 ----------------------------
+
+.. TODO make sure we talk about Kafka in general.
+
+We adopted the open source `Confluent Platform Helm charts`_ specifically as the canonical Kubernetes-based Kafka distribution for this investigation.
+The platform consists of the following components:
+
+- Kafka broker and Zookeeper cluster
+- Confluent `Schema Registry`_ service
+- `Kafka Connect`_ server
+- KSQL_ server
+- Confluent REST Proxy
+
+The Kafka brokers are the core of the Kafka service.
+Kafka brokers receive messages from producers, store that data on disk, and provide messages to consumers.
+Kafka brokers are effectively databases.
+The Zookeeper cluster manages the Kafka cluster.
+
+The `Schema Registry`_ is a unique product developed by Confluent that provides an HTTP API for a database of Avro_ schemas that define the format of messages in Kafka topics.
+In short, Avro_ and the Schema Registry enable us to efficiently encode messages with full knowledge of the format of those messages.
+Schemas are versioned so that the content of topics can evolve over time, without breaking the ability to read older topics.
+Avro and the Schema Registry are discussed further in :ref:`schemas`.
+
+`Kafka Connect`_ is another product developed by Confluent that allows us to deploy ready-made services that move Kafka messages to and from other services.
+Kafka Connect makes use of Avro and the Schema Registry to make data formatting issues completely transparent.
+Confluent maintains a central listing of connectors at https://www.confluent.io/hub/.
+For this investigation, we use the Landoop InfluxDB connector, which moves Kafka messages to InfluxDB in real time (see the :ref:`next section <influx-intro>` for an introduction to InfluxDB).
+
+KSQL_ is another product developed by Confluent and included in the platform deployment
+KSQL provides a SQL-like query engine on top of Kafka topics.
+We have not yet made use of it in this investigation as InfluxDB provides our primary query platform, though it is an interesting capability.
+
+The `REST Proxy`_, as the name suggests, provides an HTTP API for producing or consuming Kafka messages.
+Since the Kafka design normally requires clients to have network visibility to all brokers in a cluster, it's difficult to expose brokers to the internet.
+The REST Proxy provides one solution to it, though we have not used it in this investigation.
+
+All of these services are deployable from a set of Helm charts that are maintained by Confluent.
+We have also been able to wrap the Helm deployment with Terraform, to make a customized infrastructure-as-code solution for our specific Kafka deployments.
+As a result, we have found it quite easy to stand up and operate Kafka and related services in Kubernetes.
+See :ref:`terraform-and-helm` for further discussion.
+
+.. _influx-intro:
 
 The InfluxData stack
 --------------------
@@ -52,11 +95,20 @@ The above specs are sufficient for running JVM, but not recommended for producti
 
 The performance requirements for InfluxDB, based on the expected throughout (see below), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category. Thus a single InfluxDB node instance for the DM-EFD should be enough.
 
+.. _terraform-and-helm:
+
 Terraform and Helm
 ------------------
 
 Monitoring
 ----------
+
+.. _schemas:
+
+SAL schema management with Avro and the Schema Registry
+=======================================================
+
+This section describes how message schemas are managed.
 
 Connecting Kafka and InfluxDB
 =============================
@@ -409,3 +461,11 @@ References
 
 .. .. bibliography:: local.bib lsstbib/books.bib lsstbib/lsst.bib lsstbib/lsst-dm.bib lsstbib/refs.bib lsstbib/refs_ads.bib
 ..    :style: lsst_aa
+
+.. _Avro: https://avro.apache.org/docs/current/
+.. _Confluent Platform Helm charts: https://docs.confluent.io/current/installation/installing_cp/cp-helm-charts/docs/index.html
+.. _Schema Registry: https://docs.confluent.io/current/schema-registry/docs/index.html
+.. _KSQL: https://docs.confluent.io/current/ksql/docs/index.html
+.. _Kafka Connect: https://docs.confluent.io/current/connect/index.html
+.. _REST Proxy: https://docs.confluent.io/current/kafka-rest/docs/index.html
+.. _ts_xml: https://github.com/lsst-ts/ts_xml
