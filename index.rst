@@ -315,7 +315,7 @@ In particular, these results are very encouraging because both Kafka and InfluxD
 Visualizing SAL Topics with Chronograf
 --------------------------------------
 
-`Chronograf <https://chronograf-demo.lsst.codes>`_ presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them.
+`Chronograf <https://chronograf-demo.lsst.codes>`__ presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them.
 
 
 .. figure:: /_static/chronograf.png
