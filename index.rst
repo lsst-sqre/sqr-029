@@ -835,8 +835,8 @@ InfluxDB Terminology
 - A **database** store one or more series.
 - A database can have one or more **retention policies**.
 
-References
-==========
+.. References
+.. ==========
 
 .. .. rubric:: References
 
