@@ -572,10 +572,10 @@ Example of an Avro schema for the ``MTM1M3_accelerometerData`` SAL topic, and th
   2. InfluxDB does not support ``array`` data type. Fields named like ``<field name>0, <field name>1, ...`` were extracted from arrays in the Avro message.
 
 
-The SAL mock experiment
+The mock SAL experiment
 =======================
 
-With the SAL mock experiment, we want to access the performance of our prototype implementation of the DM-EFD.
+With the mock SAL experiment, we want to access the performance of our prototype implementation of the DM-EFD by generating messages and consuming messages that simulate actual SAL message payloads.
 
 In the following sections we explain the experiment we designed, how we produced messages for the SAL topics, and finally, we characterize the mean latency for a message from the time it was produced to the time InfluxDB writes it to the disk. Finally, we measure the InfluxDB ingestion rate during the experiment.
 
@@ -608,8 +608,18 @@ Producer ID  Topic type        # of topics  Frequency (Hz)  Expected throughput 
 Producing SAL topics
 --------------------
 
-- Converting SAL XML schema to Apache Avro
-- The AIOKafkaProducer
+The producers are implemented as part of the `kafka-efd-demo`_ codebase.
+Before running, the producers assume that Avro schemas are in the Confluent Schema Registry that correspond to each SAL topic.
+This conversion and registration is described in :ref:`ts-xml-conversion` and implemented in `kafka-efd-demo`_.
+
+The individual producers are containerized and deployed as Kubernetes jobs.
+A single producer, which operates in a single container on a given node can produce mock SAL messages for many topics simultaneously.
+As described in the previous section, the experiment is currently set up so that commands, log events, and telemetry are produced separately.
+The experiment's throughput can be increased by further spreading topics across more containers and Kubernetes nodes.
+
+When producers start up, they create a separate producer for each topic.
+Producers are implemented with the aiokafka_ ``AIOKafkaProducer`` class and operate as separate tasks of an ``asyncio`` event loop.
+Each producer generates a random message according to the topic's schema, sends that message to the Kafka broker, then sleeps for the amount of time necessary to simulate the desired message frequency.
 
 The measured throughput
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -837,3 +847,4 @@ References
 .. _Confluent Wire Format: https://docs.confluent.io/current/schema-registry/docs/serializer-formatter.html#wire-format
 .. _kafka-efd-demo: https://github.com/lsst-sqre/kafka-efd-demo
 .. _`DMTN-093: Design of the LSST Alert Distribution System`: https://dmtn-093.lsst.io
+.. _aiokafka: https://aiokafka.readthedocs.io/en/stable/
