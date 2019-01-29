@@ -705,6 +705,15 @@ For monitoring the different telescope and observatory subsystems, it is possibl
 Live SAL experiment with Avro transformations
 =============================================
 
+This experiment is a live demonstration of the full end-to-end DM-EFD.
+In January 2019 the mirror cell (``MTM1M3`` and ``MTM1M3TS`` subsystems) produced messages that were processed by SAL.
+This SAL included Kafka writers that produced plain text messages to Kafka topics named ``MTM1M3TS_telemetry`` and ``MTM1M3_telemetry``.
+Transformer applications, implemented as part of the kafka-efd-demo_ codebase and deployed to GKE consumed these topics, parsed the plain text messages, serialized the content with Avro, and produced messages to a second set of Kafka topics named after the fully-qualified names of the schemas, for example ``lsst.sal.MTM1M3TS_thermalData``.
+
+.. note::
+
+   Results are pending.
+
 Lessons Learned
 ===============
 
