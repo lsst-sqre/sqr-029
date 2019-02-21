@@ -68,9 +68,6 @@ See :ref:`terraform-and-helm` for further discussion.
 The InfluxData stack
 --------------------
 
-Why a time series database?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
 Why InfluxData?
 ^^^^^^^^^^^^^^^
 The InfluxData stack provides a complete solution for storing, visualizing and processing time series data:
@@ -100,8 +97,11 @@ The performance requirements for InfluxDB, based on the expected throughout (see
 Terraform and Helm
 ------------------
 
-Monitoring
-----------
+We have used a combination of `Terraform <https://www.terraform.io/>`_ and `Helm <https://docs.helm.sh/>`_ to automate the creation of the cluster on GKE and to install the Confluent Kafka and InfluxDB applications (see `terraform-efd-kafka <https://github.com/lsst-sqre/terraform-efd-kafka>`_). It also includes the installation of a `Grafana dashboard <https://grafana-efd-kafka.lsst.codes>`_ for monitoring system metrics.
+
+The creation of the InfluxDB database and retention policies, the creation of the InfluxDB sink connector,  the initializion the SAL topics in the Kafka Schema Registry, and the deployment of the SAL transformers is also automated by installing the `kafka-efd-apps <https://lsst-sqre.github.io/charts/>`_ Helm chart.
+
+In summary, the deployment of the DM-EFD is done after setting a small number of configuration parameters and executing a single Terraform command that creates 32 resources in a few minutes.
 
 .. _schemas:
 
@@ -477,7 +477,7 @@ Further requirement and design definition work is needed to drive Avro schema ma
 Connecting Kafka and InfluxDB
 =============================
 
-At the time of this implementation, the `Confluent InfluxDB connector <https://docs.confluent.io/current/connect/kafka-connect-influxdb/index.html>`_ was still in preview and did not have the functionality we needed. Instead of the Confluent InfluxDB connector, we used the `InfluxDB Sink connector developed by Landoop <https://docs.lenses.io/connectors/sink/influx.html>`_.
+As of January 2019, the `Confluent InfluxDB connector <https://docs.confluent.io/current/connect/kafka-connect-influxdb/index.html>`_ was still in preview and did not have the functionality we needed. Instead of the Confluent InfluxDB connector, we used the `InfluxDB Sink connector developed by Landoop <https://docs.lenses.io/connectors/sink/influx.html>`_.
 
 We added the Landoop InfluxDB Sink connector plugin version 1.1 to the ``cp-kafka-connect`` container and implemented scripts to facilitate its configuration.
 
@@ -490,7 +490,7 @@ The InfluxDB schema
 
 One of the characteristics of InfluxDB is that it creates the database schema when it writes the data to the database, this is commonly known as *schemaless* or *schema-on-write*. The advantage is that no schema creation and database migrations are needed, greatly simplifying the database management. However,  it also means that it is not possible to enforce a schema with InfluxDB only.
 
-In the proposed architecture, the schema is controlled by Kafka through `Avro and the Schema Registry <https://docs.confluent.io/current/schema-registry/docs/index.html#schemaregistry-intro>`_. As the schema may need to evolve, it is important for InfluxDB, and for other consumers, to be able to handle data encoded with both old and new schema seamlessly. While this report does not explore `schema evolution <https://docs.confluent.io/current/schema-registry/docs/avro.html#data-serialization-and-evolution>`_  that is undoubtedly important and we will revisit.
+In the proposed architecture, the schema is controlled by Kafka through Avro and the Schema Registry (see :ref:`schemas`). As the schema may need to evolve, it is important for InfluxDB, and for other consumers, to be able to handle data encoded with both old and new schema seamlessly. While this report does not explore `schema evolution <https://docs.confluent.io/current/schema-registry/docs/avro.html#data-serialization-and-evolution>`_  that is undoubtedly important and we will revisit.
 
 The data in InfluxDB, however, does not necessarily need to follow the Avro schema. The InfluxDB Sink Connector supports `KCQL <https://docs.lenses.io/connectors/sink/influx.html#kcql-support>`_, the Kafka Connect Query Language, that can be used to select fields to define the target measurement, and `set tags to annotate the measurements <https://docs.influxdata.com/influxdb/v1.7/concepts/schema_and_data_layout/>`_.
 
@@ -583,9 +583,9 @@ In the following sections we explain the experiment we designed, how we produced
 Designing the experiment
 ------------------------
 
-To run a realistic experiment that emulates the EFD, besides producing messages for each SAL topic, one would need to know the frequency of every topic, which is not available in the SAL schema.
+To run a realistic experiment, besides producing messages for each SAL topic, one would need to know the frequency of every topic, which is not available in the SAL schema.
 
-From the current SAL XML schema we have a total of 1051 topics, in which 274 are commands, 541 are log events, and 236 are telemetry. For simplicity, we assume a distribution of frequencies for the different types of topics, as shown in the table below.
+As of January, 10 2019, there are a total of 1051 topics in `ts_xml <https://github.com/lsst-ts/ts_xml>`_, in which 274 are commands, 541 are log events, and 236 are telemetry. For simplicity, we assume a distribution of frequencies for the different types of topics, as shown in the table below.
 
 ============ ================= ============ =============== ===================================
 Producer ID  Topic type        # of topics  Frequency (Hz)  Expected throughput (messages/s)
@@ -604,6 +604,8 @@ Producer ID  Topic type        # of topics  Frequency (Hz)  Expected throughput 
 - Total number of topics: 1051
 - Total expected throughput: 29284 messages/s
 - Experiment Duration: 16h
+
+.. _producing-sal-topics:
 
 Producing SAL topics
 --------------------
@@ -633,11 +635,11 @@ The measured throughput
 - Number of topics produced: 1051
 - Maximum measured throughput for the producers: 1330 messages/s
 
-Another Prometheus metric of interest is ``cp_kafka_server_brokertopicmetrics_bytesinpersec`` which give us a mean throughput at the brokers, for all topics, of 40KB/s. We observe the same value when looking at the Network traffic as monitored by the InfluxDB telegraf client.
+Another Prometheus metric of interest is ``cp_kafka_server_brokertopicmetrics_bytesinpersec``. This metric gives us a mean throughput at the brokers, for all topics, of 40KB/s. We observe the same value when looking at the Network traffic as monitored by the InfluxDB telegraf client.
 
-As a point of comparison, this throughput is lower than the *Long-term mean ingest rate to the Engineering and Facilities Database of non-science images required to be supported* for the EFD of 1.9 MB/s from **OCS-REQ-0048**.
+As a point of comparison,the *Long-term mean ingest rate to the Engineering and Facilities Database of non-science images required to be supported* for the EFD of 1.9 MB/s from **OCS-REQ-0048**.
 
-We can do better by improving the producer throughput, and we demonstrate that we can reach a higher performance with a simple test when accessing the InfluxDB maximum ingestion rate for the current setup.
+We can do better by improving the producer throughput, and we demonstrate that we can reach a higher throughput with a simple test when accessing the InfluxDB maximum ingestion rate for the current setup (see :ref:`influxdb-ingestion-rate`).
 
 Latency measurements
 --------------------
@@ -652,8 +654,9 @@ We characterize the roundtrip latency as the difference between the time the mes
 
 **The median roundtrip latency for a telemetry topic produced over the duration of the experiment was 183ms with 99% of the messages with latency smaller than 1.34s.**
 
-This result would allow for quasi-realtime access to the telemetry stream from resources at the LDF.  That would not be possible with the current baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
+This result is encouraging for enabling quasi-realtime access to the telemetry stream from resources at the Base Facility or even at the LDF.  That would not be possible with the current baseline design (see discussion in `DMTN-082 <https://dmtn-082.lsst.io/>`_).
 
+.. _influxdb-ingestion-rate:
 
 The InfluxDB ingestion rate
 ---------------------------
@@ -664,17 +667,22 @@ The InfluxDB ingestion rate
 
    The figure shows the InfluxDB ingestion rate in units of points per minute.
 
-Because of the current InfluxDB schema, an InfluxDB point is equivalent to a message. The measured InfluxDB ingestion rate during the experiment was ~80k points/min or 1333 messages/s, which is the producer throughput (see above). This result is supported by the very low latency observed.
+The measured InfluxDB ingestion rate during the experiment was 1333 messages/s, which is essentially the producer throughput (see :ref:`producing-sal-topics`). This result is supported by the very low latency observed.
+
+.. note::
+
+  Because of the current InfluxDB schema, an InfluxDB point is equivalent to a SAL topic message.
+
 
 InfluxDB provides a metric ``write_error`` that counts the number of errors when writing points, and it was ``write_error=0`` during the whole experiment.
 
-During the experiment, we also saw the InfluxDB disk filling up at a rate of 682MB/h or 16GB/day. Even with `InfluxDB data compression <https://www.influxdata.com/blog/influxdb-0-9-3-released-with-compression-improved-write-throughput-and-migration-from-0-8/>`_ that means 5.7TB/year which seems too much, especially if we want to query over longer periods like **OCS-REQ-0047** suggests, e.g., *"raft 13 temperatures for past two years"*. For the DM-EFD, we are considering downsampling the time series and using a retention policy, as discussed in the `Lessons Learned`_.
+During the experiment, we also saw the InfluxDB disk filling up at a rate of 682MB/h or 16GB/day. Even with `InfluxDB data compression <https://www.influxdata.com/blog/influxdb-0-9-3-released-with-compression-improved-write-throughput-and-migration-from-0-8/>`_ that means 5.7TB/year which seems too much, especially if we want to query over longer periods like **OCS-REQ-0047** suggests, e.g., *"raft 13 temperatures for past two years"*. For the DM-EFD, we are considering downsampling the time series and using a retention policy (see :ref:`lessons-learned`).
 
 Finally, a simple test can be done to assess the maximum InfluxDB ingestion rate for the current setup.
 
-We stopped the InfluxDB Sink connector, and let the producer running during a period T. The Kafka brokers cached the messages produced during T, and as soon as the connector was re-started, all the messages were flushed to InfluxDB as if they were produced in a much higher throughput.
+We paused the InfluxDB Sink connector, and let the producer run for a period T. The Kafka brokers cached the messages produced during T, and as soon as the connector was re-started, all the messages were flushed to InfluxDB as if they were produced in a much higher throughput.
 
-The figure below shows the result of this test, where we see a measured ingestion rate of 1M points per minute or 16k messages per second, a factor of 12 better than the previous result. Also, we had ``write_error=0`` during this test.
+The figure below shows the result of this test, where we see a measured ingestion rate of 1M messages per minute (or 16k messages per second), a factor of 12 better than the previous result. Also, we had ``write_error=0`` during this test.
 
 
 .. figure:: /_static/influxdb_max.png
@@ -689,7 +697,7 @@ In particular, these results are very encouraging because both Kafka and InfluxD
 Visualizing SAL Topics with Chronograf
 --------------------------------------
 
-`Chronograf <https://chronograf-demo.lsst.codes>`__ presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them.
+The Chronograf UI presents the SAL topics as InfluxDB measurements. One can use the Explore tool to browse and visualize them using the Query Builder to build a query that defines the visualization.
 
 
 .. figure:: /_static/chronograf.png
@@ -698,7 +706,9 @@ Visualizing SAL Topics with Chronograf
 
    Visualization using the Chronograf Explore tool.
 
-For monitoring the different telescope and observatory subsystems, it is possible to organize these visualizations in Dashboards.
+For monitoring the different telescope and observatory subsystems, it is possible to organize these visualizations in Dashboards in `Chronograf <https://chronograf-demo.lsst.codes>`_.
+
+The InfluxData stack was also adopted for the SQuaSH system, and it will be possible to access both DM-EFD and SQuaSH databases from the same Chronograf instance combining both telemetry and Science Quality data (see also :ref:`influxdb-http-api`).
 
 .. _saltransform:
 
@@ -714,13 +724,15 @@ Transformer applications, implemented as part of the kafka-efd-demo_ codebase an
 
    Results are pending.
 
+.. _lessons-learned:
+
 Lessons Learned
 ===============
 
 Downsampling and data retention
 -------------------------------
 
-It was evident during the experiment that the disks fill up pretty quickly. The influxDB disk was filling up at a rate of ~700M/h which means that the 128G storage would be filled up in ~7 days. Similarly, for Kafka, we filled up the 5G disk of each broker in a few days. That means we need downsampling the data if we don't want to lose it and configure retention policies to discard data after it is no longer useful automatically.
+It was evident during the experiment that the disks fill up pretty quickly. The influxDB disk was filling up at a rate of ~700M/h which means that the 128G storage would be filled up in ~7 days. Similarly, for Kafka, we filled up the 5G disk of each broker in a few days. That means we need downsampling the data if we don't want to lose it and configure retention policies to automatically discard high frequency data if it is no longer useful.
 
 In InfluxDB it is easy to configure both `downsampling and data retention <https://docs.influxdata.com/influxdb/v1.7/guides/downsampling_and_retention/>`_.
 
@@ -728,7 +740,7 @@ InfluxDB organizes time series data in *shards* and will drop an entire shard wh
 
 For the experiments, we have created a `Kafka` database in InfluxDB to have a default retention policy of 24h and shard duration of 1h following the `retention policy documentation <https://docs.influxdata.com/influxdb/v1.7/query_language/database_management/#create-retention-policies-with-create-retention-policy>`_.
 
-InfluxDB creates retention policies per database, and it is possible to have multiple retention policies for the same database. To preserve data for a more extended period, we have created another retention policy with a duration of 1 year and a `Continuous Query <https://docs.influxdata.com/influxdb/v1.7/query_language/continuous_queries/>`_ to average the time series every 30s.
+InfluxDB creates retention policies per database, and it is possible to have multiple retention policies for the same database. To preserve data for a more extended period, we have created another retention policy with a duration of 1 year and demonstrate that a `Continuous Query <https://docs.influxdata.com/influxdb/v1.7/query_language/continuous_queries/>`_ can be configured to average the time series every 30s. That lead to a downsampling factor of 30000 for topics produced at 100Hz.
 
 
 .. figure:: /_static/downsampling.png
@@ -737,7 +749,7 @@ InfluxDB creates retention policies per database, and it is possible to have mul
 
    The figure shows a raw time series (top) and an averaged time series by a continuous query (bottom).
 
-Example of a continuous query for the `mtm1m3-accelerometerdata` topic. If we produce topics at 100Hz and average the time series in intervals of 30 seconds, the downsampling factor is 30000.
+Example of a continuous query for the `mtm1m3-accelerometerdata` topic.
 
 ::
 
@@ -750,7 +762,7 @@ Example of a continuous query for the `mtm1m3-accelerometerdata` topic. If we pr
   END
 
 
-The retention policy of 24h in InfluxDB suggests that we configure a Kafka retention policy for the logs and topic offsets with the same duration. It means that InfluxDB can be unavailable for 24h and still recover the messages from the Kafka brokers. We added the following `configuration parameters <https://kafka.apache.org/documentation/#configuration>`_ to the ``cp-kafka`` helm chart:
+The retention policy of 24h in InfluxDB suggests that we configure a Kafka retention policy for the logs and topic offsets with the same duration. It means that the database can be unavailable for 24h and it is still possible to recover the messages from the Kafka brokers. We added the following `configuration parameters <https://kafka.apache.org/documentation/#configuration>`_ to the ``cp-kafka`` helm chart:
 
 
 ::
@@ -761,11 +773,12 @@ The retention policy of 24h in InfluxDB suggests that we configure a Kafka reten
     offsets.retention.minutes: 1440
     log.retention.hours: 24
 
+.. _influxdb-http-api:
 
 The InfluxDB HTTP API
 ---------------------
 
-InfluxDB provides an HTTP API for accessing the data when using the HTTP API we
+InfluxDB provides an HTTP API for accessing the data,  when using the HTTP API we
 set ``max_row_limit=0`` in the InfluxDB configuration to avoid data truncation.
 
 A code snippet to retrieve data from a particular topic would look like:
@@ -783,6 +796,7 @@ A code snippet to retrieve data from a particular topic would look like:
 
     return r.json()
 
+Following the desin in  `DMTN-082 <https://dmtn-082.lsst.io/>`_ we plan to access this data from the LSST Science Platform through a common TAP API, that seems possible using for example `Influxalchemy <https://github.com/amancevice/influxalchemy>`_.
 
 Backing up an InfluxDB database
 --------------------------------
