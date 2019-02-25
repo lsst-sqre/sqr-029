@@ -16,6 +16,11 @@ DM-EFD prototype implementation based on Kafka and InfluxDB.
 Introduction
 ============
 
+In `DMTN-082 <https://dmtn-082.lsst.io>`_ we sketched out a proposed solution to the problem of exposing data like telescope telemetry to the Science Platform users with minimal latency. This is a usecase that arose from the desire to make Science Platform capabilities to the Commissioning team, which requires prompt access to observatory parameters during characterisation of the facility. We therefore sketched out an architecture based on Kafka to siphon the data from the SAL writers (who populate the Engineering Facilities Database) to a time-series database. During review of this proposal, the DM Manager asked for a demonstration that this architecture would be capable of scaling to the required data throughput.
+
+We developed a prototype to demonstrate the elements of this architecture and to  be able to benchmark its performance. The results of this prototype sprint are described in this report. The purpose of this report is to inform the decision on whether to proceed with this architecture. 
+
+
 The adopted technologies
 ========================
 
