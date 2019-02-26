@@ -745,7 +745,7 @@ InfluxDB organizes time series data in *shards* and will drop an entire shard wh
 
 For the experiments, we have created a `Kafka` database in InfluxDB to have a default retention policy of 24h and shard duration of 1h following the `retention policy documentation <https://docs.influxdata.com/influxdb/v1.7/query_language/database_management/#create-retention-policies-with-create-retention-policy>`_.
 
-InfluxDB creates retention policies per database, and it is possible to have multiple retention policies for the same database. To preserve data for a more extended period, we have created another retention policy with a duration of 1 year and demonstrate that a `Continuous Query <https://docs.influxdata.com/influxdb/v1.7/query_language/continuous_queries/>`_ can be configured to average the time series every 30s. That lead to a downsampling factor of 30000 for topics produced at 100Hz.
+InfluxDB creates retention policies per database, and it is possible to have multiple retention policies for the same database. To preserve data for a more extended period, we have created another retention policy with a duration of 1 year and demonstrate that a `Continuous Query <https://docs.influxdata.com/influxdb/v1.7/query_language/continuous_queries/>`_ can be configured to average the time series every 30s. That lead to a downsampling factor of 3000 for topics produced at 100Hz.
 
 
 .. figure:: /_static/downsampling.png
