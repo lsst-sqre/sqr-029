@@ -18,7 +18,7 @@ Introduction
 
 In `DMTN-082 <https://dmtn-082.lsst.io>`_ we sketched out a proposed solution to the problem of exposing data like telescope telemetry to the Science Platform users with minimal latency. This is a usecase that arose from the desire to make Science Platform capabilities to the Commissioning team, which requires prompt access to observatory parameters during characterisation of the facility. We therefore sketched out an architecture based on Kafka to siphon the data from the SAL writers (who populate the Engineering Facilities Database) to a time-series database. During review of this proposal, the DM Manager asked for a demonstration that this architecture would be capable of scaling to the required data throughput.
 
-We developed a prototype to demonstrate the elements of this architecture and to  be able to benchmark its performance. The results of this prototype sprint are described in this report. The purpose of this report is to inform the decision on whether to proceed with this architecture. 
+We developed a prototype to demonstrate the elements of this architecture and to  be able to benchmark its performance. The results of this prototype sprint are described in this report. The purpose of this report is to inform the decision on whether to proceed with this architecture.
 
 
 The adopted technologies
@@ -95,7 +95,15 @@ The GKE cluster specs
 
 The above specs are sufficient for running JVM, but not recommended for production. See `Running Kafka in Production <https://docs.confluent.io/current/kafka/deployment.html>`_  and `InfluxDB hardware guidelines for single node <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ for more information.
 
-The performance requirements for InfluxDB, based on the expected throughout (see below), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category. Thus a single InfluxDB node instance for the DM-EFD should be enough.
+In particular, the performance requirements for InfluxDB, based on the expected throughput from SAL (see :ref:`mock-experiment`), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category. Thus a single InfluxDB node for each instance of the DM-EFD is enough.
+
+Considering that monitoring of the DM-EFD data during operations will require more than 25 `moderate queries <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ per second, we probably should be more conservative and follow the `high load hardware sizing recommendations <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#high-load-recommendations>`_:
+
+* CPU: 8+ cores
+* RAM: 32+ GB
+* IOPS: 1000+
+
+It is also recommended that InfluxDB should be run on locally attached solid state drives (SSDs) to increase I/O performance. Note that more tests should be done beyond this prototype implementation to estimate the hardware sizing if Kapacitor is used to aggregate the time-series data.
 
 .. _terraform-and-helm:
 
@@ -576,6 +584,7 @@ Example of an Avro schema for the ``MTM1M3_accelerometerData`` SAL topic, and th
   1. InfluxDB does not have ``double`` or ``long`` `datatypes <https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_reference/#data-types>`_.
   2. InfluxDB does not support ``array`` data type. Fields named like ``<field name>0, <field name>1, ...`` were extracted from arrays in the Avro message.
 
+.. _mock-experiment:
 
 The mock SAL experiment
 =======================
