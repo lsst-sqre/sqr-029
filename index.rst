@@ -73,6 +73,16 @@ See :ref:`terraform-and-helm` for further discussion.
 The InfluxData stack
 --------------------
 
+Why a time-series database?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Telemetry data and events are, by nature, time-series data.
+
+A `time-series database (TSDB) <https://www.influxdata.com/time-series-database/>`_, in contrast to a general purpose relational database like MySQL or Oracle, is already optimized to efficiently store and query time-series data. A TSDB like `InfluxDB <https://docs.influxdata.com/influxdb/v1.7/>`_ already implements features like data retention policies and downsampling which are fundamental to the time-series data management.
+
+A TSDB stores data in shards indexed by the timestamp which makes queries constrained by a time interval extremely efficient.
+
+
 Why InfluxData?
 ^^^^^^^^^^^^^^^
 The InfluxData stack provides a complete solution for storing, visualizing and processing time series data:
