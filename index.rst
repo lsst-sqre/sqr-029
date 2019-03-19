@@ -95,6 +95,7 @@ The InfluxData stack provides a complete solution for storing, visualizing and p
 Deploying Confluent Kafka and InfluxData
 ========================================
 
+
 The GKE cluster specs
 ---------------------
 
@@ -105,7 +106,12 @@ The GKE cluster specs
 
 The above specs are sufficient for running JVM, but not recommended for production. See `Running Kafka in Production <https://docs.confluent.io/current/kafka/deployment.html>`_  and `InfluxDB hardware guidelines for single node <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ for more information.
 
-In particular, the performance requirements for InfluxDB, based on the expected throughput from SAL (see :ref:`mock-experiment`), falls into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category. Thus a single InfluxDB node for each instance of the DM-EFD is enough.
+.. _influx-sizing:
+
+InfluxDB hardware guidelines
+----------------------------
+
+Based on the expected throughput from SAL (see :ref:`mock-experiment`), the InfluxDB performance requirements fall into the `moderate load <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_  category. Thus a single InfluxDB node for each instance of the DM-EFD is enough.
 
 Considering that monitoring of the DM-EFD data during operations will require more than 25 `moderate queries <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#general-hardware-guidelines-for-a-single-node>`_ per second, we probably should be more conservative and follow the `high load hardware sizing recommendations <https://docs.influxdata.com/influxdb/v1.7/guides/hardware_sizing/#high-load-recommendations>`_:
 
@@ -836,13 +842,26 @@ We do observe a drop in the ingestion rate to 50k points/min during the backup, 
    :name: Drop in the ingestion rate during a backup of the DM-EFD database.
    :target: _static/influxdb_backup.png
 
-   The figures shows how the InfluxDB ingestion rate is affected during a backup.
+   The figure shows how the InfluxDB ingestion rate is affected during a backup.
 
 
+InfluxDB memory usage
+---------------------
+
+Concerns about InfluxDB memory usage were raised in `this community post <https://community.influxdata.com/t/addressing-the-growing-ram-vs-usage-issue-aka-unexpected-out-of-memory/6339>`_.
+The original post use case is low load (~1000 series) in a constrained hardware 1 GB memory using InfluxDB 1.6.
+
+We didn't observe issues with memory usage in InfluxDB 1.7 during the SAL mock experiment. Memory usage was about 4GB for moderate load (< 1 million series) on a n1-standard-2 (2 vCPUs, 7.5 GB memory) GKE instance. That is compatible with the hardware sizing recommendations for single node (see :ref:`InfluxDB hardware guidelines <influx-sizing>` ).
+
+However, we didn't store the raw data for more than 24h in this experiment and did not try queries over longer time periods. For querying over long time periods, downsampling the data seems to be the only feasible option.
 
 
-User Defined Functions
-----------------------
+.. figure:: /_static/memory_usage.png
+   :name: Memory usage during the SAL mock experiment
+   :target: _static/memory_usage.png
+
+   The figure shows memory usage and other statistics obtained from the Telegraf plugin deployed to the InfluxDB instance, during one of the experiments. The four curves displayed in the CPU usage are `usage_system`, `usage_user`, `usage_iowait` and `usage_idle`.
+
 
 APPENDIX
 ========
