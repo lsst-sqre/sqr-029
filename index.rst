@@ -866,31 +866,137 @@ However, we didn't store the raw data for more than 24h in this experiment and d
 APPENDIX
 ========
 
+DM-EFD play book
+----------------
+
+In this section we list commands and procedures that were useful during the implementation and tests of
+the DM-EFD.
+
+Running the kafkaefd utility locally
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Install ``kafkaefd`` on a virtual environment with Python 3.6+:
+
+.. code-block:: bash
+
+  virtualenv env --python python3.6
+  source env/bin/activate
+  pip install git+https://github.com/lsst-sqre/kafka-efd-demo
+
+
+You can run ``kafkaefd`` locally while connecting to the remote Kafka cluster on Kubernetes using `Telepresence <https://www.telepresence.io/>`_:
+
+.. code-block:: bash
+
+  telepresence --run-shell --namespace kafka --also-proxy confluent-cp-kafka-headless --also-proxy confluent-cp-schema-registry --also-proxy confluent-cp-kafka-connect
+
+
+Set the following environment variables used by ``kafkaefd``:
+
+.. code-block:: bash
+
+	export BROKER=confluent-cp-kafka-headless:9092
+	export KAFKA_CONNECT=http://confluent-cp-kafka-connect:8083
+	export SCHEMAREGISTRY=http://confluent-cp-schema-registry:8081
+
+
+Listing topics
+^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+  kafkaefd admin topics list
+
+
+A SAL topic is prefixed by the subsystem name, and have a suffix identifying its type (command, telemetry or event).
+
+Topics starting with ``lsst.sal.`` are produced by the SAL transform app. The corresponding Avro schemas are organized by `subjects <http://confluent-cp-schema-registry:8081/subjects>`_ with the same name.
+
+Deleting topics
+^^^^^^^^^^^^^^^
+
+For testing, sometimes, it is useful to eliminate the initial offset for the topics, you can do that by deleting them:
+
+.. code-block:: bash
+
+	kafkaefd admin topics delete  $(kafkaefd admin topics list --inline --filter MTM1M3*)
+
+
+Debugging the SAL transform app
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inspecting the SAL transform logs for a particular subsystem:
+
+.. code-block:: bash
+
+  kubectl logs $(kubectl get pods --namespace kafka-efd-apps -l "app=saltransform,subsystem=MTM1M3" -o jsonpath="{.items[0].metadata.name}") --namespace kafka-efd-apps
+
+
+For debugging the SAL transform app, you might want to run it locally. In doing so, you should first delete the actual deployment in the cluster and then run the app locally.
+
+.. code-block:: bash
+
+	kafkaefd saltransform run --auto-offset-reset latest --subsystem MTM1M3 --log-level debug
+
+
+Debugging the InfluxDB Sink connector
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inspecting the Kafka connect logs:
+
+.. code-block:: bash
+
+  kubectl logs $(kubectl get pods --namespace kafka -l "app=cp-kafka-connect,release=confluent" -o jsonpath="{.items[0].metadata.name}") cp-kafka-connect-server --namespace kafka -f
+
+Checking the status of the ``influxdb-sink`` connector:
+
+.. code-block:: bash
+
+	kafkaefd admin connectors status influxdb-sink
+
+
+Deleting the ``influxdb-sink`` connector:
+
+.. code-block:: bash
+
+	kafkaefd admin connectors delete influxdb-sink
+
+Creating a new connector that consumes all the ``lsst.sal.*`` topics:
+
+.. code-block:: bash
+
+	kafkaefd  admin connectors create influxdb-sink --influxdb https://influxdb-efd-kafka.lsst.codes --database efd --username <influxdb username> --password <influxdb password>  --daemon $(kafkaefd admin topics list --inline --filter lsst.sal.*)
+
+
 Kafka Terminology
 -----------------
 
-- Each server in the Kafka clusters is called a **broker**.
-- Kafka stores messages in a category name called **topic**.
-- A Kafka message is a key-value pair, and the key, message, or both, can be serialized as **Avro**.
-- A **schema** defines the structure of the Avro data format.
-- The Schema Registry defines a **subject** as a scope where a schema can evolve. The name of the subject depends on the configured subject name strategy, which by default is set to derive the subject name from the topic name.
-- The processes which publish messages to Kafka are called **producers**. Also, it publishes data on specific topics.
-- **Consumers** are the processes that subscribe to topics.
-- The position of the consumer in the log is called **offset**. Kafka retains that on a per-consumer basis.
-- The Kafka **connector** permits to build and run reusable consumers or producers that connects existing applications to Kafka topics.
+  - A Kafka cluster can have several **brokers**, other components are the Schema Registry, the Zookeeper and the Kafka Connect.
+  - Kafka stores messages in a category name called **topic**.
+  - A Kafka message is a key-value pair. The key, message, or both, can be serialized as **Avro**.
+  - A **schema** defines the structure of the Avro data format.
+  - The Schema Registry defines a **subject** or scope where a schema can evolve. The name of the subject depends on the configured subject name strategy, which by default is set to derive the subject name from the topic name.
+  - The processes that publish messages to Kafka are called **producers**. Also, they publish data on specific topics.
+  - **Consumers** are processes that subscribe to topics.
+  - The position of the consumer in the log is called **offset**. Kafka retains that on a per-consumer basis.
+  - The Kafka **connector** permits to build and run reusable consumers or producers that connects existing applications to Kafka topics.
 
 
 InfluxDB Terminology
 --------------------
 
-- A **measurement** is conceptually similar to an SQL table. The measurement name describes the data stored in the associated fields.
-- A **field** corresponds to the actual data and are not indexed.
-- A **tag** is used to annotate your data  (metadata) and is automatically indexed.
-- A **point** contains the field-set of a series for a given tag-set and timestamp. Points are equivalent to messages in Kafka.
-- A measurement and a tag-set define a **series**. A *series** contains points.
-- The **series cardinality** depends mostly on how the tag-set is designed. A rule of thumb for InfluxDB is to have fewer series with more points than more series with fewer points to improve performance.
-- A **database** store one or more series.
-- A database can have one or more **retention policies**.
+  - A **measurement** is conceptually similar to an SQL table. The measurement name describes the data stored in the associated fields.
+  - A **field** corresponds to the actual data and are not indexed.
+  - A **tag** is used to annotate your data  (metadata) and is automatically indexed.
+  - A **point** contains the field-set of a series for a given tag-set and timestamp. Points are equivalent to messages in Kafka.
+  - A measurement and a tag-set define a **series**. A *series** contains points.
+  - The **series cardinality** depends mostly on how the tag-set is designed. A rule of thumb for InfluxDB is to have fewer series with more points than more series with fewer points to improve performance.
+  - A **database** store one or more series.
+  - A database can have one or more **retention policies**.
+
+
+
+
 
 .. References
 .. ==========
