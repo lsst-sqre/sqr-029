@@ -95,7 +95,7 @@ The InfluxData stack provides a complete solution for storing, visualizing and p
 Deploying Confluent Kafka and InfluxData
 ========================================
 
-
+.. _cluster-specs:
 The GKE cluster specs
 ---------------------
 
@@ -414,14 +414,15 @@ In addition to the fields defined in the ts_xml_ schemas, the Avro schemas inclu
 
 The last five fields are emitted by SAL with each message.
 
+.. _approaches-for-integrating-avro:
+
 Practical approaches to integrating Avro into the SAL and DM-EFD system
 -----------------------------------------------------------------------
 
 Kafka and Avro aren't initial features of the SAL.
 Through this investigation, the Telescope & Site team added a basic capability for SAL to produce Kafka messages by creating a Kafka writer that is analogous to existing EFD and log writers.
 At the moment of this writing, SAL does not encode messages in Avro.
-This section describes the pros and cons of adding Avro serialization to SAL itself.
-This describes the pros and cons of two approaches to integrating Avro serialization with SAL.
+This section describes the pros and cons of two approaches to integrating Avro serialization with SAL.
 
 Approach 1: online message transformation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -671,6 +672,9 @@ As a point of comparison,the *Long-term mean ingest rate to the Engineering and 
 
 We can do better by improving the producer throughput, and we demonstrate that we can reach a higher throughput with a simple test when accessing the InfluxDB maximum ingestion rate for the current setup (see :ref:`influxdb-ingestion-rate`).
 
+
+.. _latency-measurements:
+
 Latency measurements
 --------------------
 
@@ -745,14 +749,78 @@ The InfluxData stack was also adopted for the SQuaSH system, and it will be poss
 Live SAL experiment with Avro transformations
 =============================================
 
-This experiment is a live demonstration of the full end-to-end DM-EFD.
-In January 2019 the mirror cell (``MTM1M3`` and ``MTM1M3TS`` subsystems) produced messages that were processed by SAL.
-This SAL included Kafka writers that produced plain text messages to Kafka topics named ``MTM1M3TS_telemetry`` and ``MTM1M3_telemetry``.
-Transformer applications, implemented as part of the kafka-efd-demo_ codebase and deployed to GKE consumed these topics, parsed the plain text messages, serialized the content with Avro, and produced messages to a second set of Kafka topics named after the fully-qualified names of the schemas, for example ``lsst.sal.MTM1M3TS_thermalData``.
+This experiment is a live demonstration of the full end-to-end DM-EFD using the mirror cell (``MTM1M3`` and ``MTM1M3TS`` subsystems) SAL simulator. SAL has implemented Kafka writers that produce plain text messages to Kafka topics named ``MTM1M3_telemetry`` and ``MTM1M3TS_telemetry``.
 
-.. note::
+The figure shows the set up for the experiment where the SAL M1M3 simulator runs in Tucson and the DM-EFD cluster at Google Kubernetes Engine (GKE).
 
-   Results are pending.
+.. figure:: /_static/live_test_setup.png
+   :name: Live SAL experiment set up.
+   :target: _static/live_test_setup.png
+
+   Set up for the live SAL experiment with Avro transformations. The SAL M1M3 simulator runs in Tucson and the DM-EFD cluster at Google Kubernetes Engine (GKE).
+
+Topics are simulated at 50Hz by the SAL simulator. They reach the Kafka brokers at the DM-EFD cluster.
+Transformer applications, implemented as part of the kafka-efd-demo_ codebase and deployed to GKE consume these topics, parse the plain text messages, serialize the content with Avro, and produce messages to a second set of Kafka topics named after the fully-qualified names of the schemas within the ``lsst.sal.`` namespace. These topics are consumed by Kafka connect which uses the InfluxDB Sink connector to write the messages to InfluxDB.
+
+The goal of this experiment is to verify if the online message transformation approach discussed in :ref:`approaches-for-integrating-avro` can keep up with 50Hz telemetry stream.
+
+
+Latency characterization
+------------------------
+
+The latency for a specific topic was measured in different points of the system using the timestamps indicated in the figure.  The end-to-end latency is given by ``sal_created - influxdb_timestamp``.
+
+Initial results showed that we were writing data to InfluxDB at ~20Hz when expected 50Hz.
+
+We have improved the hardware configuration in our deployment compared to :ref:`cluster-specs`.
+
+* Machine type: n1-standard-4 (4 vCPUs, 15 GB memory)
+* Size: 4 nodes
+* Total cores: 16 vCPUs
+* Total memory: 60 GB
+* Using SSD disks for Kafka and InfluxDB
+
+
+Using SSDs disks and adding one extra node to have more resources for InfluxDB helped to improve the latency, but it became clear that the transformation step was the main bottleneck.
+
+The latency measured by ``influxdb_timestamp - kafka_timestamp``, does not including the transformation step, is compatible with the results presented before in :ref:`latency-measurements`.
+
+In particular, the time to consume, transform, and produce the message with the biggest payload in the experiment `lsst.sal.MTM1M3_forceActuatorData <https://efd-schema-registry.lsst.codes/#/cluster/default/schema/lsst.sal.MTM1M3_forceActuatorData/version/1>`_ essentially dictates the latency we observe.
+
+Tuning the consumer and producer settings
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We also found that the time to consume and produce the messages is comparable to the time to transform them. First we tuned the  `consumer <https://aiokafka.readthedocs.io/en/stable/api.html#aiokafkaconsumer-class>`_  and `producer <https://aiokafka.readthedocs.io/en/stable/api.html#aiokafkaproducer-class>`_ settings using ``check_crcs=False`` and ``ack=0`` respectively. That reduced the time to consume-transform-produce  ```lsst.sal.MTM1M3_forceActuatorData`` messages from 0.05s to 0.035s
+ 
+The transformation step includes the time to retrieve the schema from the Kafka Schema Registry, the time to process the message fields and the time to serialize to Avro, which are roughly 9%, 90% and 1% of the transformation time respectively.
+
+Transform optimization
+^^^^^^^^^^^^^^^^^^^^^^
+
+To reduce the time to process the message fields we introduced the ``--tasks`` option to SAL transform that creates a configurable ``asyncio`` buffer to process messages concurrently.
+
+We found that ``--tasks 10`` is enough to reduce the transform time by 10ms.
+
+After running SAL transform with that option and disabling the debug logs we were able to keep up with the 50Hz telemetry stream.
+
+The figure shows the end-to-end latency for ``lsst.sal.MTM1M3_forceActuatorData`` messages after running the experiment for 1h. After tuning the consumer and producer settings and optimizing the transformation step we measured a medium latency of 0.058s with 99% of the time below 0.36s.
+
+
+.. figure:: /_static/live_test_latency.png
+   :name: Live test latency
+   :target: _static/live_test_latency.png
+
+   Latency measured after tuning the consumer and producer settings and optimizing the transformation step.
+
+We also notice that querying the InfluxDB at the same time reduces the ingestion rate and introduces some latency, but after some time we are able to recover.
+
+.. figure:: /_static/live_test_latency_with_load.png
+   :name: Live test latency with load
+   :target: _static/live_test_latency_with_load.png
+
+   Latency measured after loading the InfluxDB with queries.
+
+
 
 .. _lessons-learned:
 
@@ -866,31 +934,137 @@ However, we didn't store the raw data for more than 24h in this experiment and d
 APPENDIX
 ========
 
+DM-EFD play book
+----------------
+
+In this section we list commands and procedures that were useful during the implementation and tests of
+the DM-EFD.
+
+Running the kafkaefd utility locally
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Install ``kafkaefd`` on a virtual environment with Python 3.6+:
+
+.. code-block:: bash
+
+  virtualenv env --python python3.6
+  source env/bin/activate
+  pip install git+https://github.com/lsst-sqre/kafka-efd-demo
+
+
+You can run ``kafkaefd`` locally while connecting to the remote Kafka cluster on Kubernetes using `Telepresence <https://www.telepresence.io/>`_:
+
+.. code-block:: bash
+
+  telepresence --run-shell --namespace kafka --also-proxy confluent-cp-kafka-headless --also-proxy confluent-cp-schema-registry --also-proxy confluent-cp-kafka-connect
+
+
+Set the following environment variables used by ``kafkaefd``:
+
+.. code-block:: bash
+
+	export BROKER=confluent-cp-kafka-headless:9092
+	export KAFKA_CONNECT=http://confluent-cp-kafka-connect:8083
+	export SCHEMAREGISTRY=http://confluent-cp-schema-registry:8081
+
+
+Listing topics
+^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+  kafkaefd admin topics list
+
+
+A SAL topic is prefixed by the subsystem name, and have a suffix identifying its type (command, telemetry or event).
+
+Topics starting with ``lsst.sal.`` are produced by the SAL transform app. The corresponding Avro schemas are organized by `subjects <http://confluent-cp-schema-registry:8081/subjects>`_ with the same name.
+
+Deleting topics
+^^^^^^^^^^^^^^^
+
+For testing, sometimes, it is useful to eliminate the initial offset for the topics, you can do that by deleting them:
+
+.. code-block:: bash
+
+	kafkaefd admin topics delete  $(kafkaefd admin topics list --inline --filter MTM1M3*)
+
+
+Debugging the SAL transform app
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inspecting the SAL transform logs for a particular subsystem:
+
+.. code-block:: bash
+
+  kubectl logs $(kubectl get pods --namespace kafka-efd-apps -l "app=saltransform,subsystem=MTM1M3" -o jsonpath="{.items[0].metadata.name}") --namespace kafka-efd-apps
+
+
+For debugging the SAL transform app, you might want to run it locally. In doing so, you should first delete the actual deployment in the cluster and then run the app locally.
+
+.. code-block:: bash
+
+	kafkaefd saltransform run --auto-offset-reset latest --subsystem MTM1M3 --log-level debug
+
+
+Debugging the InfluxDB Sink connector
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inspecting the Kafka connect logs:
+
+.. code-block:: bash
+
+  kubectl logs $(kubectl get pods --namespace kafka -l "app=cp-kafka-connect,release=confluent" -o jsonpath="{.items[0].metadata.name}") cp-kafka-connect-server --namespace kafka -f
+
+Checking the status of the ``influxdb-sink`` connector:
+
+.. code-block:: bash
+
+	kafkaefd admin connectors status influxdb-sink
+
+
+Deleting the ``influxdb-sink`` connector:
+
+.. code-block:: bash
+
+	kafkaefd admin connectors delete influxdb-sink
+
+Creating a new connector that consumes all the ``lsst.sal.*`` topics:
+
+.. code-block:: bash
+
+	kafkaefd  admin connectors create influxdb-sink --influxdb https://influxdb-efd-kafka.lsst.codes --database efd --username <influxdb username> --password <influxdb password>  --daemon $(kafkaefd admin topics list --inline --filter lsst.sal.*)
+
+
 Kafka Terminology
 -----------------
 
-- Each server in the Kafka clusters is called a **broker**.
-- Kafka stores messages in a category name called **topic**.
-- A Kafka message is a key-value pair, and the key, message, or both, can be serialized as **Avro**.
-- A **schema** defines the structure of the Avro data format.
-- The Schema Registry defines a **subject** as a scope where a schema can evolve. The name of the subject depends on the configured subject name strategy, which by default is set to derive the subject name from the topic name.
-- The processes which publish messages to Kafka are called **producers**. Also, it publishes data on specific topics.
-- **Consumers** are the processes that subscribe to topics.
-- The position of the consumer in the log is called **offset**. Kafka retains that on a per-consumer basis.
-- The Kafka **connector** permits to build and run reusable consumers or producers that connects existing applications to Kafka topics.
+  - A Kafka cluster can have several **brokers**, other components are the Schema Registry, the Zookeeper and the Kafka Connect.
+  - Kafka stores messages in a category name called **topic**.
+  - A Kafka message is a key-value pair. The key, message, or both, can be serialized as **Avro**.
+  - A **schema** defines the structure of the Avro data format.
+  - The Schema Registry defines a **subject** or scope where a schema can evolve. The name of the subject depends on the configured subject name strategy, which by default is set to derive the subject name from the topic name.
+  - The processes that publish messages to Kafka are called **producers**. Also, they publish data on specific topics.
+  - **Consumers** are processes that subscribe to topics.
+  - The position of the consumer in the log is called **offset**. Kafka retains that on a per-consumer basis.
+  - The Kafka **connector** permits to build and run reusable consumers or producers that connects existing applications to Kafka topics.
 
 
 InfluxDB Terminology
 --------------------
 
-- A **measurement** is conceptually similar to an SQL table. The measurement name describes the data stored in the associated fields.
-- A **field** corresponds to the actual data and are not indexed.
-- A **tag** is used to annotate your data  (metadata) and is automatically indexed.
-- A **point** contains the field-set of a series for a given tag-set and timestamp. Points are equivalent to messages in Kafka.
-- A measurement and a tag-set define a **series**. A *series** contains points.
-- The **series cardinality** depends mostly on how the tag-set is designed. A rule of thumb for InfluxDB is to have fewer series with more points than more series with fewer points to improve performance.
-- A **database** store one or more series.
-- A database can have one or more **retention policies**.
+  - A **measurement** is conceptually similar to an SQL table. The measurement name describes the data stored in the associated fields.
+  - A **field** corresponds to the actual data and are not indexed.
+  - A **tag** is used to annotate your data  (metadata) and is automatically indexed.
+  - A **point** contains the field-set of a series for a given tag-set and timestamp. Points are equivalent to messages in Kafka.
+  - A measurement and a tag-set define a **series**. A *series** contains points.
+  - The **series cardinality** depends mostly on how the tag-set is designed. A rule of thumb for InfluxDB is to have fewer series with more points than more series with fewer points to improve performance.
+  - A **database** store one or more series.
+  - A database can have one or more **retention policies**.
+
+
+
+
 
 .. References
 .. ==========
